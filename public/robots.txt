@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Allow: /card/
+Disallow: /dashboard/
+Disallow: /api/
+Disallow: /v1/
+
+Sitemap: https://vext.so/sitemap.xml

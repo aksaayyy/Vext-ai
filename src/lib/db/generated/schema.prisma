@@ -1,0 +1,181 @@
+// This is your Prisma schema file
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/lib/db/generated"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ── Auth.js / NextAuth required models ───────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  bonusCredits  Int       @default(0)
+
+  accounts    Account[]
+  sessions    Session[]
+  jobs        ProcessingJob[]
+  cards       Card[]
+  shareEvents ShareEvent[]
+  apiKeys     ApiKey[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ── Application models ────────────────────────────────────────────────────────
+
+model ProcessingJob {
+  id            String  @id @default(uuid())
+  userId        String?
+  anonSessionId String?
+  user          User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  videoUrl        String
+  videoId         String?
+  title           String?
+  duration        Int?
+  durationSeconds Int?
+  status          String  @default("queued")
+  transcription   String?
+  language        String?
+  confidence      Float?
+  providerUsed    String?
+  errorMessage    String?
+  errorLog        String?
+  failed_attempts Int     @default(0)
+  downloadPath    String?
+  audioPath       String?
+  wordCount       Int?
+
+  createdAt   DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  cards Card[]
+
+  @@index([userId])
+  @@index([anonSessionId])
+  @@index([status, createdAt])
+}
+
+model Card {
+  id            String  @id @default(uuid())
+  jobId         String?
+  userId        String?
+  anonSessionId String?
+
+  job  ProcessingJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  user User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  classification String
+  output         Json
+  cardId         String  @unique
+  shareId        String  @unique
+  title          String?
+  views          Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([jobId])
+  @@index([shareId])
+  @@index([userId])
+  @@index([anonSessionId])
+}
+
+// ── Share-to-unlock tracking ──────────────────────────────────────────────────
+
+model ShareEvent {
+  id        String  @id @default(cuid())
+  shareId   String // which card was shared
+  userId    String? // null for anonymous
+  ipAddress String? // fallback for anonymous
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([shareId, userId])
+  @@index([shareId, ipAddress])
+  @@index([userId])
+}
+
+// ── Developer API keys ────────────────────────────────────────────────────────
+
+model ApiKey {
+  id               String    @id @default(cuid())
+  userId           String
+  keyHash          String    @unique // SHA-256 of raw key
+  keyPrefix        String // first 8 chars (for display)
+  name             String    @default("Default")
+  plan             String    @default("free")
+  totalExtractions Int       @default(0)
+  isActive         Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  lastUsedAt       DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([keyHash])
+  @@index([userId])
+}
+
+// ── Monitoring & Uptime ──────────────────────────────────────────────────────
+
+model ProviderHealthLog {
+  id        String   @id @default(cuid())
+  provider  String // groq, nvidia, openrouter
+  status    String // ok, error
+  latencyMs Int
+  message   String?
+  createdAt DateTime @default(now())
+
+  @@index([provider, createdAt])
+}

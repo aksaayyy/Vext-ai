@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+@theme {
+  /* Surface Hierarchy (Obsidian Scale) */
+  --color-canvas: #0B0E12;
+  --color-surface-lvl1: #13171C;
+  --color-surface-lvl2: #1A1F26;
+  --color-surface-overlay: #202731;
+
+  /* Functional Neon Accents */
+  --color-neon-cyan: #00D4FF;
+  --color-neon-purple: #B084FF;
+  --color-neon-green: #00FF88;
+  --color-neon-error: #FF4D4D;
+
+  /* Typography */
+  --font-heading: "Space Grotesk", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-code: "JetBrains Mono", monospace;
+
+  /* Text Colors */
+  --color-text-primary: #E6E0E9;
+  --color-text-secondary: #CBC4D2;
+  --color-text-dim: #948E9C;
+
+  /* Spacing & Shapes */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+}
+
+@layer base {
+  html {
+    background-color: var(--color-canvas);
+    color: var(--color-text-primary);
+  }
+  body {
+    background-color: var(--color-canvas);
+    font-family: "Inter", sans-serif;
+  }
+}
+
+@layer components {
+  .vext-card {
+    @apply bg-surface-lvl1 p-6 rounded-md transition-all;
+  }
+  .vext-card:hover {
+    @apply bg-surface-lvl2;
+  }
+  .terminal-window {
+    @apply bg-surface-lvl2 rounded-md p-4 relative border-t-[24px] border-surface-lvl1;
+  }
+  
+  /* Texture Overlays */
+  .scanlines::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 1px,
+      rgba(0,0,0,0.03) 1px,
+      rgba(0,0,0,0.03) 2px
+    );
+    pointer-events: none;
+    z-index: 50;
+    opacity: 0.3;
+  }
+}
+
+/* Animations */
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.animate-cursor {
+  animation: cursor-blink 1s step-end infinite;
+}
+
+/* Data Flow */
+.data-flow-line {
+  @apply h-px bg-surface-lvl2 relative overflow-hidden;
+}
+.data-flow-pulse {
+  @apply absolute inset-y-0 left-0 w-10 bg-linear-to-r from-transparent via-neon-cyan to-transparent;
+  animation: flow-pulse 2s linear infinite;
+}
+@keyframes flow-pulse {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
+/* Noise texture */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3%3Ffilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.01;
+  pointer-events: none;
+}
