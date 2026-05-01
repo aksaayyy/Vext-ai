@@ -16,22 +16,7 @@ export async function checkFfmpeg(): Promise<boolean> {
   }
 }
 
-// Install ffmpeg on macOS/Linux via apt or brew
-export async function ensureFfmpeg(): Promise<void> {
-  const hasFfmpeg = await checkFfmpeg();
-  if (hasFfmpeg) {
-    return;
-  }
 
-  console.log('ffmpeg not found, attempting to install...');
-  try {
-    // Try Homebrew on macOS
-    await execAsync('brew install ffmpeg 2>/dev/null || apt-get update && apt-get install -y ffmpeg 2>/dev/null || true');
-  } catch (e) {
-    // Ignore installation errors - ffmpeg might still be available
-    console.log('Could not auto-install ffmpeg:', e);
-  }
-}
 
 // Convert audio to 16k mono WAV for Whisper
 export async function convertToWav16k(inputPath: string, outputPath: string): Promise<{ duration: number }> {

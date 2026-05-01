@@ -1,16 +1,10 @@
-import { PrismaClient } from './generated';
-import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaClient } from '@prisma/client';
 
 // Singleton pattern to avoid creating too many connections in dev (HMR)
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
-function createPrismaClient() {
-  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
-  return new PrismaClient({ adapter } as any);
-}
-
 export const prisma: PrismaClient =
-  globalForPrisma.prisma ?? createPrismaClient();
+  globalForPrisma.prisma ?? new PrismaClient();
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;

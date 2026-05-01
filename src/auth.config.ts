@@ -1,34 +1,8 @@
 import type { NextAuthConfig } from 'next-auth';
-import Credentials from 'next-auth/providers/credentials';
-import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 export default {
-  providers: [
-    Credentials({
-      async authorize(credentials) {
-        if (credentials.email) {
-          const email = credentials.email as string;
-          
-          // Ensure the user exists in the DB to satisfy foreign keys
-          const { prisma } = await import('@/lib/db/client');
-          const user = await prisma.user.upsert({
-            where: { email },
-            update: { name: 'Vext User' },
-            create: { email, name: 'Vext User' },
-          });
-
-          return {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-          };
-        }
-        return null;
-      },
-    }),
-  ],
+  providers: [], // Providers moved to auth.ts to avoid Edge incompatibility
   pages: {
     signIn: '/login',
   },

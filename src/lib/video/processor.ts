@@ -32,7 +32,7 @@ export class VideoProcessor {
         noWarnings: true,
         preferFreeFormats: true,
         addHeader: ['referer:youtube.com', 'user-agent:googlebot']
-      });
+      }) as any;
 
       await prisma.processingJob.update({
         where: { id: jobId },

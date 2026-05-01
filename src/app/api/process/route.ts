@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
-import { processVideoUrl } from '@/lib/audio/transcription';
-import { intelligenceService } from '@/lib/intelligence/service';
 import { v4 as uuidv4 } from 'uuid';
 
 /** Generate a random 8-char alphanumeric shareId (e.g. "aB3dF9xQ") */
@@ -40,66 +38,18 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 2. Start Processing in Background
-    // We don't await this so the API returns immediately
-    (async () => {
-      try {
-        await prisma.processingJob.update({
-          where: { id: job.id },
-          data: { status: 'processing', startedAt: new Date() },
-        });
-
-        // Step A: Download & Transcribe
-        console.log(`[Job ${job.id}] Starting transcription...`);
-        const result = await processVideoUrl(videoUrl);
-
-        // Step B: Logic Extraction
-        console.log(`[Job ${job.id}] Starting logic extraction...`);
-        const { classification, output } = await intelligenceService.processTranscript(result.text);
-
-        // Step C: Create Card
-        const cardId = generateShareId(14);
-        const shareId = generateShareId(8);
-        
-        console.log(`[Job ${job.id}] Creating card with shareId: ${shareId} for user: ${job.userId}`);
-        
-        await prisma.card.create({
-          data: {
-            jobId: job.id,
-            userId: job.userId,
-            classification,
-            output: output as any,
-            cardId,
-            shareId,
-            title: result.videoInfo.title ?? 'Untitled Extraction',
-          }
-        });
-
-        // Step D: Mark Job Completed
-        await prisma.processingJob.update({
-          where: { id: job.id },
-          data: {
-            status: 'completed',
-            transcription: result.text,
-            title: result.videoInfo.title,
-            durationSeconds: result.videoInfo.duration,
-            videoId: result.videoInfo.id,
-            completedAt: new Date(),
-          },
-        });
-
-        console.log(`[Job ${job.id}] Pipeline completed successfully.`);
-      } catch (error: any) {
-        console.error(`[Job ${job.id}] Pipeline failed:`, error);
-        await prisma.processingJob.update({
-          where: { id: job.id },
-          data: {
-            status: 'failed',
-            errorMessage: error.message || 'Internal processing error',
-          },
-        });
-      }
-    })();
+    // 2. Trigger Background Processing
+    // We call the Netlify background function which has a 15-minute timeout
+    const protocol = request.headers.get('x-forwarded-proto') || 'https';
+    const host = request.headers.get('host');
+    const baseUrl = `${protocol}://${host}`;
+    
+    // We don't await this because background functions are asynchronous anyway
+    fetch(`${baseUrl}/.netlify/functions/process-background`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ videoUrl, jobId: job.id }),
+    }).catch(err => console.error('[API] Failed to trigger background function:', err));
 
     return NextResponse.json({
       jobId: job.id,

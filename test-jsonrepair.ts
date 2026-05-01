@@ -17,7 +17,7 @@ async function main() {
   try {
     JSON.parse(brokenJson);
     console.log("Default JSON.parse succeeded (unexpected)");
-  } catch (e) {
+  } catch (e: any) {
     console.log("Default JSON.parse failed (expected):", e.message);
   }
 
