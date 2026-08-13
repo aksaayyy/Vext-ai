@@ -1,5 +1,0 @@
-Vercel CLI 48.3.0
-Retrieving project…
-Deploying akshays-projects-3534d1af/vext-ai
-Error: Hobby accounts are limited to daily cron jobs. This cron expression (*/10 * * * *) would run more than once per day. Upgrade to the Pro plan to unlock all Cron Jobs features on Vercel.
-Learn More: https://vercel.link/3Fpeeb1
