@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Clock, CheckCircle2, MoreHorizontal, Loader2 } from 'lucide-react';
+import { Clock, CheckCircle2, MoreHorizontal, Loader2, Sparkles } from 'lucide-react';
 
 interface ExtractionItem {
   id: string;
@@ -78,9 +78,22 @@ export function IntelligenceList({ initialItems }: { initialItems: ExtractionIte
             </div>
             
             {item.shareId ? (
-              <Button variant="secondary" size="sm" asChild className="neon-glow-cyan/20">
-                <a href={`/card/${item.shareId}`}>View Results</a>
-              </Button>
+              <>
+                <Button variant="secondary" size="sm" asChild className="neon-glow-cyan/20">
+                  <a href={`/card/${item.shareId}`}>View Results</a>
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  asChild
+                  className="text-neon-purple hover:text-neon-purple/80"
+                >
+                  <a href={`/dashboard/brainstorm/${item.id}`}>
+                    <Sparkles className="w-3 h-3 mr-1" />
+                    Brainstorm
+                  </a>
+                </Button>
+              </>
             ) : item.status === 'Completed' ? (
               <span className="text-[10px] text-text-dim italic">Finalizing SIG...</span>
             ) : null}

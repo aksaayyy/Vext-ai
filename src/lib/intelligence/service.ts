@@ -6,18 +6,8 @@ import { groqSmoother, nvidiaSmoother, openRouterSmoother } from '../utils/rate-
 import { 
   VideoClassification, 
   VideoClassificationType,
-  CardOutputSchema, 
   CardSchema, 
-  type CardOutputType, 
   type CardType,
-  SetupTutorialSchema,
-  StrategyFrameworkSchema,
-  ToolDemoSchema,
-  FinanceSetupSchema,
-  ProductTeardownSchema,
-  InterviewTalkSchema,
-  ResearchPaperSchema,
-  DebateDiscussionSchema,
   SaaSBlueprintSchema
 } from './schemas';
 import { z } from 'zod';
@@ -111,42 +101,37 @@ CRITICAL INSTRUCTIONS FOR JSON VALIDITY:
 3. For multi-line strings like \`system_prompt_text\` or \`starter_code_snippet\`, you MUST use \\n instead of literal line breaks.
 `;
 
-const generationPrompts: Record<string, (transcript: string) => string> = {
-  'saas/blueprint': godModePrompt,
-  'setup/tutorial': godModePrompt,
-  'strategy/framework': godModePrompt,
-  'tool demo': godModePrompt,
-  'finance/setup': godModePrompt,
-  'product teardown': godModePrompt,
-  'interview/talk': godModePrompt,
-  'research/paper': godModePrompt,
-  'debate/discussion': godModePrompt
-};
+export interface UserApiKeys {
+  groqApiKey?: string | null;
+  nvidiaApiKey?: string | null;
+  openrouterApiKey?: string | null;
+}
 
 export class IntelligenceService {
-  private providers: Provider[];
+  private providers: Provider[] | null = null;
+  private userKeys: UserApiKeys;
 
-  constructor() {
-    this.providers = [
-      new GroqProvider(process.env.GROQ_API_KEY),
-      new NVIDIAProvider(process.env.NVIDIA_API_KEY),
-      new OpenRouterProvider(process.env.OPENROUTER_API_KEY)
-    ].filter(provider => {
-      try {
-        const key = process.env[
-          provider.name === 'groq' ? 'GROQ_API_KEY' :
-          provider.name === 'nvidia' ? 'NVIDIA_API_KEY' :
-          'OPENROUTER_API_KEY'
-        ];
+  constructor(userKeys: UserApiKeys = {}) {
+    this.userKeys = userKeys;
+  }
+
+  private getProviders(): Provider[] {
+    if (this.providers === null) {
+      const groqKey = this.userKeys.groqApiKey || process.env.GROQ_API_KEY;
+      const nvidiaKey = this.userKeys.nvidiaApiKey || process.env.NVIDIA_API_KEY;
+      const openrouterKey = this.userKeys.openrouterApiKey || process.env.OPENROUTER_API_KEY;
+
+      this.providers = [
+        new GroqProvider(groqKey),
+        new NVIDIAProvider(nvidiaKey),
+        new OpenRouterProvider(openrouterKey)
+      ].filter(provider => {
+        const key = provider.name === 'groq' ? groqKey :
+          provider.name === 'nvidia' ? nvidiaKey : openrouterKey;
         return !!key;
-      } catch {
-        return false;
-      }
-    });
-
-    if (this.providers.length === 0) {
-      throw new Error('No LLM providers configured');
+      });
     }
+    return this.providers;
   }
 
   private cleanJson(text: string): string {
@@ -164,13 +149,14 @@ export class IntelligenceService {
   }
 
   private async smartCallWithFailover(prompt: string): Promise<string> {
-    if (!this.providers || this.providers.length === 0) {
-      throw new Error('No providers available');
+    const providers = this.getProviders();
+    if (providers.length === 0) {
+      throw new Error('No LLM providers configured');
     }
 
     let lastError: Error | null = null;
 
-    for (const provider of this.providers) {
+    for (const provider of providers) {
       const t0 = Date.now();
       try {
         if (provider.name === 'groq') await groqSmoother.wait();
@@ -238,28 +224,13 @@ export class IntelligenceService {
     return 'saas/blueprint'; // Default to blueprint for God Mode
   }
 
-  async generateOutput(transcript: string, classification: string): Promise<CardOutputType> {
-    const prompt = (generationPrompts[classification] || godModePrompt)(transcript);
+  async generateOutput(transcript: string): Promise<z.infer<typeof SaaSBlueprintSchema>> {
+    const prompt = godModePrompt(transcript);
     const result = await this.smartCallWithFailover(prompt);
     
     try {
       const parsed = JSON.parse(this.cleanJson(result));
-      if (parsed.core_opportunity || classification === 'saas/blueprint') {
-        return SaaSBlueprintSchema.parse(parsed);
-      }
-
-      // Legacy fallback (should ideally not hit this since all prompts are now godModePrompt)
-      switch (classification) {
-        case 'setup/tutorial': return SetupTutorialSchema.parse(parsed);
-        case 'strategy/framework': return StrategyFrameworkSchema.parse(parsed);
-        case 'tool demo': return ToolDemoSchema.parse(parsed);
-        case 'finance/setup': return FinanceSetupSchema.parse(parsed);
-        case 'product teardown': return ProductTeardownSchema.parse(parsed);
-        case 'interview/talk': return InterviewTalkSchema.parse(parsed);
-        case 'research/paper': return ResearchPaperSchema.parse(parsed);
-        case 'debate/discussion': return DebateDiscussionSchema.parse(parsed);
-        default: return SaaSBlueprintSchema.parse(parsed);
-      }
+      return SaaSBlueprintSchema.parse(parsed);
     } catch (error) {
       console.error('Failed to parse output:', error);
       throw new Error(`Failed to generate blueprint: ${error}`);
@@ -268,9 +239,13 @@ export class IntelligenceService {
 
   async processTranscript(transcript: string): Promise<CardType> {
     const classification = await this.classifyTranscript(transcript);
-    const output = await this.generateOutput(transcript, classification);
+    const output = await this.generateOutput(transcript);
     return { classification, output };
   }
 }
 
 export const intelligenceService = new IntelligenceService();
+
+export function createIntelligenceService(userKeys: UserApiKeys = {}) {
+  return new IntelligenceService(userKeys);
+}

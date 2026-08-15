@@ -206,11 +206,12 @@ export async function transcribeAudio(
 }
 
 // Process a video URL end-to-end
-export async function processVideoUrl(videoUrl: string): Promise<TranscriptionResult & { videoInfo: any }> {
+export async function processVideoUrl(videoUrl: string, instagramCookies?: string): Promise<TranscriptionResult & { videoInfo: any }> {
   const { downloadVideoAudio } = await import('./downloader');
   const { convertToWav16k, ensureDirectoryExists, cleanupFile } = await import('./ffmpeg');
+  const { tmpdir } = await import('os');
 
-  const outputDir = path.join('/tmp', 'vext-audio');
+  const outputDir = path.join(tmpdir(), 'vext-audio');
   ensureDirectoryExists(outputDir);
 
   let audioPath: string | null = null;
@@ -220,7 +221,7 @@ export async function processVideoUrl(videoUrl: string): Promise<TranscriptionRe
   try {
     // Step 1: Download audio from Video
     console.log(`Downloading audio from ${videoUrl}...`);
-    const downloadResult = await downloadVideoAudio(videoUrl, outputDir);
+    const downloadResult = await downloadVideoAudio(videoUrl, outputDir, { instagramCookies });
     audioPath = downloadResult.audioPath;
     videoInfo = downloadResult.info;
 

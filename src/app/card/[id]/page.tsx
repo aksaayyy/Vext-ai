@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { DownloadButton } from '@/components/ui/DownloadButton';
 import { CopyButton } from '@/components/ui/CopyButton';
 import { AgentZipButton } from '@/components/ui/AgentZipButton';
+import { FullPackButton } from '@/components/ui/FullPackButton';
 import { Terminal } from '@/components/ui/Terminal';
 import { 
   Download, Share2, Shield, Box, FileCode, CheckCircle2, 
@@ -63,8 +64,9 @@ export default async function CardViewerPage({ params }: { params: Promise<{ id:
           </div>
           
           {isBlueprint && (
-            <div className="shrink-0 mt-4 md:mt-0">
+            <div className="shrink-0 mt-4 md:mt-0 flex flex-col gap-2">
               <AgentZipButton output={output} shareId={card.shareId} />
+              <FullPackButton shareId={card.shareId} />
             </div>
           )}
         </header>

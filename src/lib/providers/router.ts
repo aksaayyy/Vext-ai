@@ -97,9 +97,11 @@ class GroqProvider implements Provider {
   rpm = 30;
   private rateLimiter: RateLimiter;
   private client: any;
+  private model: string;
 
   constructor(apiKey?: string) {
     this.rateLimiter = new RateLimiter(this.rpm);
+    this.model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
     if (apiKey) {
       const { Groq } = require("groq-sdk");
       this.client = new Groq({ apiKey, dangerouslyAllowBrowser: true });
@@ -120,7 +122,7 @@ class GroqProvider implements Provider {
     try {
       const response = await this.client.chat.completions.create({
         messages: [{ role: "user", content: prompt }],
-        model: "llama-3.3-70b-versatile",
+        model: this.model,
       });
       this.rateLimiter.recordRequest(this.name);
       return response.choices[0]?.message?.content || "";
@@ -156,10 +158,12 @@ class NVIDIAProvider implements Provider {
   rpm = 30;
   private rateLimiter: RateLimiter;
   private apiKey?: string;
+  private model: string;
 
   constructor(apiKey?: string) {
     this.rateLimiter = new RateLimiter(this.rpm);
     this.apiKey = apiKey;
+    this.model = process.env.NVIDIA_MODEL || "meta/llama-3.1-8b-instruct";
   }
 
   async call(prompt: string): Promise<string> {
@@ -183,7 +187,7 @@ class NVIDIAProvider implements Provider {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "meta/llama-3.1-8b-instruct",
+            model: this.model,
             messages: [{ role: "user", content: prompt }],
             temperature: 0.5,
             max_tokens: 1024,
@@ -238,10 +242,12 @@ class OpenRouterProvider implements Provider {
   rpm = 30;
   private rateLimiter: RateLimiter;
   private apiKey?: string;
+  private model: string;
 
   constructor(apiKey?: string) {
     this.rateLimiter = new RateLimiter(this.rpm);
     this.apiKey = apiKey;
+    this.model = process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
   }
 
   async call(prompt: string): Promise<string> {
@@ -264,7 +270,7 @@ class OpenRouterProvider implements Provider {
           "HTTP-Referer": "http://localhost:3000",
         },
         body: JSON.stringify({
-          model: "openai/gpt-4o-mini",
+          model: this.model,
           messages: [{ role: "user", content: prompt }],
           temperature: 0.5,
           max_tokens: 1024,

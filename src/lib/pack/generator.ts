@@ -3,6 +3,9 @@
  * Returns Record<path, utf-8 string content>
  */
 
+import { generateManifest } from './manifest';
+import { extractKeyConcepts } from './concepts';
+
 export interface CardData {
   shareId: string;
   title: string | null;
@@ -695,6 +698,10 @@ export function generateExecutionPack(card: CardData): FileMap {
     2
   );
 
+  // Add enhanced files
+  const enhancedFiles = generateEnhancedFiles(card);
+  Object.assign(classificationFiles, enhancedFiles);
+
   // Add a README to every pack
   classificationFiles['README.md'] = `# Vext Execution Pack — ${card.title ?? 'Card'}
 
@@ -706,16 +713,23 @@ export function generateExecutionPack(card: CardData): FileMap {
 
 | File | Purpose |
 |------|---------|
-| \`prompts/system-prompt.md\` | Ready-to-paste system prompt for Claude / GPT |
+| \`manifest.json\` | Project metadata and tech stack |
+| \`SYSTEM_PROMPT.md\` | Agent instructions to recreate the project |
+| \`SETUP_GUIDE.md\` | Prerequisites and environment setup |
+| \`BUILD_PLAN.md\` | Ordered tasks with verification steps |
+| \`CODE_SNIPPETS.json\` | Extracted code with context |
+| \`KEY_CONCEPTS.json\` | Explained technical concepts |
+| \`prompts/system-prompt.md\` | Original extraction system prompt |
 | \`configs/config.yaml\` | Extracted parameters and settings |
 | \`scripts/setup-checklist.md\` | Step-by-step implementation checklist |
 ${classificationFiles['prompts/quotes.md'] ? '| `prompts/quotes.md` | Notable quotes from the source |\n' : ''}${classificationFiles['tests/starter-test.py'] ? '| `tests/starter-test.py` | Starter test scaffold (Python/pytest) |\n' : ''}| \`vext-card.json\` | Full structured card data (JSON) |
 
 ## Quick Start
 
-1. Open \`prompts/system-prompt.md\` and paste into your AI of choice
-2. Check off items in \`scripts/setup-checklist.md\` as you progress  
-3. Refer to \`configs/config.yaml\` for exact parameters
+1. Read \`SETUP_GUIDE.md\` for prerequisites
+2. Follow tasks in \`BUILD_PLAN.md\` in order
+3. Use \`SYSTEM_PROMPT.md\` to bootstrap an AI agent
+4. Reference \`CODE_SNIPPETS.json\` for implementation details
 
 ---
 *Powered by [Vext](https://vext.so) — Extract · Share · Build*
@@ -723,3 +737,258 @@ ${classificationFiles['prompts/quotes.md'] ? '| `prompts/quotes.md` | Notable qu
 
   return classificationFiles;
 }
+
+function generateEnhancedFiles(card: CardData): FileMap {
+  const o = card.output as Record<string, unknown>;
+  const title = card.title ?? 'Untitled Project';
+
+  const manifest = generateManifest(card);
+  const concepts = extractKeyConcepts(JSON.stringify(o));
+
+  const systemPrompt = generateSystemPrompt(title, o, card.classification);
+  const setupGuide = generateSetupGuide(title, o, card.classification);
+  const buildPlan = generateBuildPlan(title, o, card.classification);
+  const codeSnippets = extractCodeSnippets(o);
+
+  return {
+    'manifest.json': JSON.stringify(manifest, null, 2),
+    'SYSTEM_PROMPT.md': systemPrompt,
+    'SETUP_GUIDE.md': setupGuide,
+    'BUILD_PLAN.md': buildPlan,
+    'CODE_SNIPPETS.json': JSON.stringify(codeSnippets, null, 2),
+    'KEY_CONCEPTS.json': JSON.stringify(concepts, null, 2),
+  };
+}
+
+function generateSystemPrompt(title: string, output: Record<string, unknown>, classification: string): string {
+  const stack = output.recommended_stack as string[] || [];
+  const starterCode = output.starter_code_snippet as string || '';
+  const prompts = output.prompts_to_generate as Array<{system_prompt_text: string; user_prompt_template: string}> || [];
+
+  return `# System Prompt — ${title}
+
+You are an expert software engineer tasked with building the project described below.
+
+## Project Overview
+- **Name**: ${title}
+- **Classification**: ${classification}
+- **Created**: ${new Date().toISOString()}
+
+## Goal
+Build a complete, production-ready implementation based on the extracted knowledge from video tutorials.
+
+## Recommended Tech Stack
+${stack.length > 0 ? stack.map(t => `- ${t}`).join('\n') : '- Not specified (use appropriate tools for the task)'}
+
+## Core Problem to Solve
+${output.core_opportunity ? `**Problem**: ${(output.core_opportunity as Record<string, unknown>)?.problem_statement || 'See project description'}`
+  : 'Implement the project as described in the tutorial.'}
+
+## Key Requirements
+${output.business_model ? `**Business Model**: ${((output.business_model as Record<string, unknown>)?.revenue_streams as string[])?.join(', ') || 'N/A'}`
+  : ''}
+
+## Suggested Approach
+${prompts.length > 0 ? prompts.map((p, i) => `${i + 1}. Use system prompt: "${p.system_prompt_text.slice(0, 100)}..."`).join('\n') : 'Follow the build plan for step-by-step implementation.'}
+
+${starterCode ? `## Starter Code Reference
+\`\`\`\n${starterCode}\n\`\`\`` : ''}
+
+## Instructions
+1. Analyze the SETUP_GUIDE.md for prerequisites
+2. Follow BUILD_PLAN.md tasks in order
+3. Implement each step completely before moving on
+4. Write tests for core functionality
+5. Verify the implementation matches the original tutorial intent
+
+Remember: The goal is to create a working project, not just understand the tutorial.
+`;
+}
+
+function generateSetupGuide(title: string, output: Record<string, unknown>, classification: string): string {
+  const stack = output.recommended_stack as string[] || [];
+  const apis = output.external_apis as string[] || [];
+
+  return `# Setup Guide — ${title}
+
+> Prerequisites and environment setup for building this project.
+
+## Prerequisites
+
+### Required Tools
+${stack.length > 0 ? stack.map(t => `- ${getToolRequirement(t)}`).join('\n') : '- See project-specific requirements below'}
+
+### Accounts & Access
+${apis.length > 0 ? apis.map(api => `- ${api}: Create account at official website`).join('\n') : ''}
+
+### Environment Variables
+Create a \`.env\` file in the project root:
+
+\`\`\`env
+# Required
+DATABASE_URL=postgresql://localhost:5432/project_db
+API_KEY=your_api_key_here
+
+# Optional
+DEBUG=true
+LOG_LEVEL=info
+\`\`\`
+
+## Installation Steps
+
+1. **Clone/Fork the base project**
+   \`\`\`bash
+   git clone <repository-url>
+   cd <project-name>
+   \`\`\`
+
+2. **Install dependencies**
+   \`\`\`bash
+   npm install  # or pip install -r requirements.txt for Python
+   \`\`\`
+
+3. **Configure environment**
+   \`\`\`bash
+   cp .env.example .env
+   # Edit .env with your values
+   \`\`\`
+
+4. **Set up the database**
+   \`\`\`bash
+   # Run migrations
+   npm run db:migrate  # or flask db upgrade / alembic upgrade
+   \`\`\`
+
+5. **Verify setup**
+   \`\`\`bash
+   npm run dev  # or python manage.py runserver
+   # Visit http://localhost:3000 (or 5000 for Python)
+   \`\`\`
+
+## Troubleshooting
+
+- **Database connection errors**: Ensure PostgreSQL is running and DATABASE_URL is correct
+- **API key errors**: Double-check environment variables are set
+- **Port conflicts**: Change port in config or kill existing process
+
+---
+*Generated by Vext — vext.so*
+`;
+}
+
+function generateBuildPlan(title: string, output: Record<string, unknown>, classification: string): string {
+  const roadmap = output.execution_roadmap as Record<string, string[]> | undefined;
+  const blueprint = output.technical_blueprint as Record<string, unknown> | undefined;
+  const dataModel = blueprint?.data_model as {tables_or_collections?: string[]; key_relationships?: string} | undefined;
+
+  const steps: string[] = [];
+  
+  if (roadmap) {
+    if (roadmap.month_1_mvp) steps.push(...roadmap.month_1_mvp.map(s => `Month 1: ${s}`));
+    if (roadmap.month_2_traction) steps.push(...roadmap.month_2_traction.map(s => `Month 2: ${s}`));
+    if (roadmap.month_3_scale) steps.push(...roadmap.month_3_scale.map(s => `Month 3: ${s}`));
+  }
+
+  if (steps.length === 0) {
+    steps.push(
+      'Set up development environment',
+      'Create database schema and models',
+      'Implement core functionality',
+      'Add API endpoints',
+      'Build frontend interface',
+      'Write tests',
+      'Deploy to production'
+    );
+  }
+
+  return `# Build Plan — ${title}
+
+> Ordered tasks for implementing this project. Complete each step before moving to the next.
+
+## Project: ${title}
+> Classification: ${classification}
+
+## Implementation Phases
+
+${steps.map((step, i) => `${i + 1}. [ ] ${step}`).join('\n')}
+
+## Data Model
+
+${dataModel ? `### Tables/Collections
+${(dataModel.tables_or_collections || []).map(t => `- \`${t}\``).join('\n')}
+
+### Relationships
+${dataModel.key_relationships || 'Not specified'}` : 'Data model not explicitly specified in this extraction.'}
+
+## Verification Steps
+
+After completing each phase, verify:
+- [ ] Code compiles/runs without errors
+- [ ] Tests pass
+- [ ] No console errors in browser/dev tools
+- [ ] API endpoints return expected responses
+
+## Success Criteria
+
+The project is complete when:
+- [ ] All core features from the tutorial are implemented
+- [ ] Application runs locally without errors
+- [ ] Basic tests pass
+- [ ] Documentation is updated
+
+---
+*Generated by Vext — vext.so*
+`;
+}
+
+function extractCodeSnippets(output: Record<string, unknown>): Array<{file: string; code: string; context: string}> {
+  const snippets: Array<{file: string; code: string; context: string}> = [];
+  
+  const starterCode = output.starter_code_snippet as string;
+  if (starterCode) {
+    snippets.push({
+      file: 'src/main.py', // or appropriate extension
+      code: starterCode,
+      context: 'Core implementation from the tutorial',
+    });
+  }
+
+  const generatedFiles = (output.generated_files as Record<string, Array<{filename: string; content: string}>> | undefined);
+  if (generatedFiles?.scripts) {
+    for (const script of generatedFiles.scripts) {
+      snippets.push({
+        file: script.filename,
+        code: script.content,
+        context: 'Generated script from extraction',
+      });
+    }
+  }
+
+  return snippets;
+}
+
+function getToolRequirement(tech: string): string {
+  const toolMap: Record<string, string> = {
+    'Python': 'Python 3.10+ with venv',
+    'JavaScript': 'Node.js 18+ and npm',
+    'TypeScript': 'Node.js 18+ and npm',
+    'React': 'Node.js 18+ and npm',
+    'Next.js': 'Node.js 18+ and npm',
+    'Node.js': 'Node.js 18+',
+    'FastAPI': 'Python 3.10+ with pip',
+    'Django': 'Python 3.10+ with pip',
+    'Flask': 'Python 3.10+ with pip',
+    'PostgreSQL': 'PostgreSQL 14+',
+    'MongoDB': 'MongoDB 6+',
+    'Redis': 'Redis 7+',
+    'Docker': 'Docker Desktop 4+',
+    'Kubernetes': 'kubectl + k8s cluster',
+    'AWS': 'AWS CLI configured',
+    'Cloudflare': 'Cloudflare account',
+  };
+  
+  return toolMap[tech] || tech;
+}
+
+// Re-export for convenience
+export { generateManifest, extractKeyConcepts };

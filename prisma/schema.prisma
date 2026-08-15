@@ -22,6 +22,12 @@ model User {
   createdAt     DateTime  @default(now())
   bonusCredits  Int       @default(0)
 
+  // User-supplied API keys (encrypted at rest)
+  groqApiKey       String?
+  nvidiaApiKey     String?
+  openrouterApiKey String?
+  instagramCookies String?
+
   accounts     Account[]
   sessions     Session[]
   jobs         ProcessingJob[]

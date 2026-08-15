@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
-import { intelligenceService } from '@/lib/intelligence/service';
+import { createIntelligenceService } from '@/lib/intelligence/service';
 import { z } from 'zod';
 import { auth } from '@/auth';
 import { cookies } from 'next/headers';
@@ -82,6 +82,27 @@ export async function POST(request: NextRequest) {
     // Resolve the final title (caller > job > undefined)
     const title = providedTitle ?? jobTitle;
 
+    // Get user session and API keys
+    const session = await auth();
+    const userId = session?.user ? (session.user as any).id as string : null;
+    
+    let userApiKeys = {};
+    if (userId) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { groqApiKey: true, nvidiaApiKey: true, openrouterApiKey: true }
+      });
+      if (user) {
+        userApiKeys = {
+          groqApiKey: user.groqApiKey,
+          nvidiaApiKey: user.nvidiaApiKey,
+          openrouterApiKey: user.openrouterApiKey,
+        };
+      }
+    }
+
+    const service = createIntelligenceService(userApiKeys);
+
     // Classify and generate output
     let classification: string;
     let output: unknown;
@@ -89,12 +110,10 @@ export async function POST(request: NextRequest) {
     try {
       if (videoType) {
         classification = videoType;
-        output = await intelligenceService.generateOutput(transcript, classification);
-      } else {
-        const result = await intelligenceService.processTranscript(transcript);
-        classification = result.classification;
-        output = result.output;
       }
+      const result = await service.processTranscript(transcript);
+      classification = result.classification;
+      output = result.output;
     } catch (error: unknown) {
       const err = error as Error;
       if (
@@ -105,10 +124,6 @@ export async function POST(request: NextRequest) {
       }
       throw error;
     }
-
-    // Resolve userId or anonSessionId
-    const session = await auth();
-    const userId = session?.user ? (session.user as any).id as string : null;
 
     // Ensure anon session cookie exists for backfill support
     const cookieStore = await cookies();
