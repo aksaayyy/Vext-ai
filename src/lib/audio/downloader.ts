@@ -4,6 +4,7 @@ import fs from 'fs';
 import { tmpdir } from 'os';
 import { downloadWithFreeApi, getInstagramInfo } from './instagram-api';
 import { withRetry } from '../utils/retry';
+import { createCookieFile } from './cookies';
 
 // Use custom yt-dlp path if set (for Railway/Linux deployments)
 const ytdl = process.env.YTDLP_PATH ? youtubeDl.create(process.env.YTDLP_PATH) : youtubeDl;
@@ -151,13 +152,22 @@ async function getVideoInfo(videoUrl: string, options: DownloadOptions = {}): Pr
     }
   }
 
+  let cookieFilePath: string | undefined;
+  let cleanupCookieFile: (() => void) | undefined;
+
   try {
+    if (options.instagramCookies && isInstagramUrl(videoUrl)) {
+      const cookieFile = createCookieFile(options.instagramCookies);
+      cookieFilePath = cookieFile.filePath;
+      cleanupCookieFile = cookieFile.cleanup;
+    }
+
     const info = await ytdl(videoUrl, {
       dumpSingleJson: true,
       noWarnings: true,
       noCheckCertificates: true,
       geoBypass: true,
-      ...(options.instagramCookies && isInstagramUrl(videoUrl) ? { cookies: options.instagramCookies } : {}),
+      ...(cookieFilePath ? { cookies: cookieFilePath } : {}),
     });
 
     if (typeof info === 'object' && info.id) {
@@ -176,6 +186,10 @@ async function getVideoInfo(videoUrl: string, options: DownloadOptions = {}): Pr
       } catch {}
     }
     throw error;
+  } finally {
+    if (cleanupCookieFile) {
+      cleanupCookieFile();
+    }
   }
 
   return {
@@ -190,23 +204,37 @@ async function getVideoInfo(videoUrl: string, options: DownloadOptions = {}): Pr
 async function downloadAudioFile(videoUrl: string, outputPath: string, options: DownloadOptions = {}): Promise<void> {
   const isInstagram = videoUrl.includes('instagram.com');
 
-  const ytdlOptions: any = {
-    format: 'bestaudio[ext=m4a]/bestaudio',
-    output: outputPath,
-    noWarnings: true,
-    noCheckCertificates: true,
-    // Rate-limit prevention options
-    sleepRequests: 3,                // Sleep 3 seconds between requests
-    noPlaylist: true,                // Don't download playlists
-    geoBypass: true,                 // Bypass geo-restrictions
-    addHeader: isInstagram
-      ? ['referer:https://www.instagram.com/', 'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36']
-      : ['referer:youtube.com', 'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'],
-  };
+  let cookieFilePath: string | undefined;
+  let cleanupCookieFile: (() => void) | undefined;
 
   if (isInstagram && options.instagramCookies) {
-    ytdlOptions.cookies = options.instagramCookies;
+    const cookieFile = createCookieFile(options.instagramCookies);
+    cookieFilePath = cookieFile.filePath;
+    cleanupCookieFile = cookieFile.cleanup;
+    console.log(`[Downloader] Using cookie file for Instagram: ${cookieFilePath}`);
   }
 
-  await ytdl(videoUrl, ytdlOptions);
+  try {
+    const ytdlOptions: any = {
+      format: 'bestaudio[ext=m4a]/bestaudio',
+      output: outputPath,
+      noWarnings: true,
+      noCheckCertificates: true,
+      noPlaylist: true,
+      geoBypass: true,
+      addHeader: isInstagram
+        ? ['referer:https://www.instagram.com/', 'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36']
+        : ['referer:youtube.com', 'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'],
+    };
+
+    if (cookieFilePath) {
+      ytdlOptions.cookies = cookieFilePath;
+    }
+
+    await ytdl(videoUrl, ytdlOptions);
+  } finally {
+    if (cleanupCookieFile) {
+      cleanupCookieFile();
+    }
+  }
 }
