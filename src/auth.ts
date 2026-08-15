@@ -4,8 +4,9 @@ import authConfig from './auth.config';
 import Credentials from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/db/client';
 
-// Ensure DATABASE_URL is available
+// Ensure DATABASE_URL is available - using SSL connection
 const _ = process.env.DATABASE_URL;
+console.log('[Auth] Database configured:', !!_);
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: 'jwt' },
