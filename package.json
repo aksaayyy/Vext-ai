@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npx prisma generate && next build",
+    "build": "npx prisma generate && npx prisma db push --accept-data-loss && next build",
     "start": "next start",
     "validate-env": "ts-node scripts/validate-env.ts",
     "vercel-build": "npx tsx scripts/validate-env.ts && npx prisma generate && npx prisma db push --accept-data-loss && next build",
