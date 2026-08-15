@@ -4,6 +4,9 @@ import authConfig from './auth.config';
 import Credentials from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/db/client';
 
+// Ensure DATABASE_URL is available
+const _ = process.env.DATABASE_URL;
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: 'jwt' },
   ...authConfig,
