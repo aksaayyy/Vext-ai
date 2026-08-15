@@ -1,4 +1,4 @@
-import ytDlp from 'youtube-dl-exec';
+import youtubeDl from 'youtube-dl-exec';
 import path from 'path';
 import fs from 'fs';
 import { tmpdir } from 'os';
@@ -6,7 +6,7 @@ import { downloadWithFreeApi, getInstagramInfo } from './instagram-api';
 import { withRetry } from '../utils/retry';
 
 // Use custom yt-dlp path if set (for Railway/Linux deployments)
-const ytDlp = process.env.YTDLP_PATH ? ytDlp.create(process.env.YTDLP_PATH) : ytDlp;
+const ytdl = process.env.YTDLP_PATH ? youtubeDl.create(process.env.YTDLP_PATH) : youtubeDl;
 
 const DOWNLOAD_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
 const INFO_TIMEOUT_MS = 30 * 1000; // 30 seconds
@@ -152,7 +152,7 @@ async function getVideoInfo(videoUrl: string, options: DownloadOptions = {}): Pr
   }
 
   try {
-    const info = await ytDlp(videoUrl, {
+    const info = await ytdl(videoUrl, {
       dumpSingleJson: true,
       noWarnings: true,
       noCheckCertificates: true,
@@ -192,7 +192,7 @@ async function getVideoInfo(videoUrl: string, options: DownloadOptions = {}): Pr
 async function downloadAudioFile(videoUrl: string, outputPath: string, options: DownloadOptions = {}): Promise<void> {
   const isInstagram = videoUrl.includes('instagram.com');
 
-  const ytDlpOptions: any = {
+  const ytdlOptions: any = {
     format: 'bestaudio[ext=m4a]/bestaudio',
     output: outputPath,
     noWarnings: true,
@@ -207,8 +207,8 @@ async function downloadAudioFile(videoUrl: string, outputPath: string, options: 
   };
 
   if (isInstagram && options.instagramCookies) {
-    ytDlpOptions.cookies = options.instagramCookies;
+    ytdlOptions.cookies = options.instagramCookies;
   }
 
-  await ytDlp(videoUrl, ytDlpOptions);
+  await ytdl(videoUrl, ytdlOptions);
 }
