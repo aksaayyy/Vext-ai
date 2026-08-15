@@ -5,8 +5,8 @@ import { tmpdir } from 'os';
 import { downloadWithFreeApi, getInstagramInfo } from './instagram-api';
 import { withRetry } from '../utils/retry';
 
-const YTDLP_PATH = process.env.YTDLP_PATH || 'C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python314\\Scripts\\yt-dlp.exe';
-const ytdl = create(YTDLP_PATH);
+// Use custom yt-dlp path if set, otherwise let youtube-dl-exec manage its own binary
+const ytdl = process.env.YTDLP_PATH ? create(process.env.YTDLP_PATH) : create();
 
 const DOWNLOAD_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
 const INFO_TIMEOUT_MS = 30 * 1000; // 30 seconds
