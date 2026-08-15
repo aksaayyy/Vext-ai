@@ -156,8 +156,6 @@ async function getVideoInfo(videoUrl: string, options: DownloadOptions = {}): Pr
       dumpSingleJson: true,
       noWarnings: true,
       noCheckCertificates: true,
-      // Rate-limit prevention for info fetch
-      sleepRequests: 2,
       geoBypass: true,
       ...(options.instagramCookies && isInstagramUrl(videoUrl) ? { cookies: options.instagramCookies } : {}),
     });
