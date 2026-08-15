@@ -38,18 +38,18 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 2. Trigger Background Processing
-    // We call the Netlify background function which has a 15-minute timeout
+    // 2. Trigger Background Processing via process-local endpoint
+    // On Railway, we call our own /api/process-local endpoint
     const protocol = request.headers.get('x-forwarded-proto') || 'https';
     const host = request.headers.get('host');
     const baseUrl = `${protocol}://${host}`;
     
-    // We don't await this because background functions are asynchronous anyway
-    fetch(`${baseUrl}/.netlify/functions/process-background`, {
+    // Trigger the local processor asynchronously
+    fetch(`${baseUrl}/api/process-local`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ videoUrl, jobId: job.id }),
-    }).catch(err => console.error('[API] Failed to trigger background function:', err));
+      body: JSON.stringify({ jobId: job.id }),
+    }).catch(err => console.error('[API] Failed to trigger local processor:', err));
 
     return NextResponse.json({
       jobId: job.id,
