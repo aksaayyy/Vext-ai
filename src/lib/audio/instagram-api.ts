@@ -170,7 +170,7 @@ export async function downloadWithFreeApi(videoUrl: string, outputDir: string): 
       console.log(`[Instagram API] ${endpoint.name} succeeded`);
       successResult = {
         downloadUrl: result.downloadUrl,
-        filename: result.filename,
+        filename: result.filename || 'video.mp4',
         title: result.title,
       };
 
