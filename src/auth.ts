@@ -4,9 +4,9 @@ import authConfig from './auth.config';
 import Credentials from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/db/client';
 
-// Ensure DATABASE_URL is available - using SSL connection
+// Trust host is enabled via AUTH_TRUST_HOST env var
 const _ = process.env.DATABASE_URL;
-console.log('[Auth] Database configured:', !!_);
+console.log('[Auth] Database configured:', !!_, 'Trust host:', process.env.AUTH_TRUST_HOST);
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: 'jwt' },
