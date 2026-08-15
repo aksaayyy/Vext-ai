@@ -82,7 +82,7 @@ export async function getCobaltInfo(videoUrl: string): Promise<CobaltVideoInfo> 
   }
 
   return {
-    id: extractVideoId(videoUrl),
+    id: extractVideoId(videoUrl) || 'unknown',
     title: data.output?.metadata?.title || 'Unknown Title',
     duration: 0,
     uploader: data.output?.metadata?.artist || 'Unknown',
