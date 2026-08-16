@@ -160,6 +160,10 @@ export async function resolveInstagramMedia(inputUrl: string): Promise<Instagram
       primaryMedia = candidate;
       primaryItems = items;
       console.log(`[Instagram Scraper] Resolved via ${resolverNames[i]} resolver for ${code} (${videos.length} video rendition(s))`);
+      if (isObject(candidate)) {
+        const keys = Object.keys(candidate).filter(k => /video|audio|dash|codec/i.test(k));
+        console.log(`[Instagram Scraper] Candidate media keys: ${keys.join(', ')}`);
+      }
     } else {
       console.log(`[Instagram Scraper] ${resolverNames[i]} resolver added ${videos.length} more video rendition(s) for ${code}`);
     }
