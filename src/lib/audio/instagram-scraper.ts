@@ -570,17 +570,25 @@ function mediaItems(media: Json, code: string): MediaItem[] {
 }
 
 function instagramItem(media: Record<string, unknown>, index: number | null): MediaItem[] {
-  const video = selectVersion(media.video_versions) ?? (typeof media.video_url === 'string' ? media.video_url : null);
-  if (video) {
-    const versions = Array.isArray(media.video_versions) ? (media.video_versions as unknown[]).filter(isObject) : [];
-    const otherUrls = versions
-      .map((v) => (isObject(v) && typeof v.url === 'string' ? v.url : null))
-      .filter((url): url is string => typeof url === 'string' && url !== video);
-    const urls = [video, ...otherUrls];
+  const versions = Array.isArray(media.video_versions) ? (media.video_versions as unknown[]).filter(isObject) : [];
+  const selected = selectVersion(media.video_versions);
+  const directUrl = typeof media.video_url === 'string' ? media.video_url : null;
+  const video = selected ?? directUrl;
+  if (video || versions.length > 0) {
+    const urls: string[] = [];
     const seen = new Set<string>();
-    return urls
-      .filter((url) => (seen.has(url) ? false : (seen.add(url), true)))
-      .map((url) => ({ kind: 'video' as const, url }));
+    const add = (url: string | null) => {
+      if (url && !seen.has(url)) {
+        seen.add(url);
+        urls.push(url);
+      }
+    };
+    add(directUrl);
+    add(selected);
+    for (const v of versions) {
+      add(isObject(v) && typeof v.url === 'string' ? v.url : null);
+    }
+    return urls.map((url) => ({ kind: 'video' as const, url }));
   }
   const image = selectImage(media);
   return image ? [{ kind: 'image', url: image }] : [];
