@@ -36,48 +36,58 @@ export async function downloadInstagramVideo(videoUrl: string, outputDir: string
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
-  const videoPath = path.join(outputDir, `${videoId}_video.mp4`);
   const audioPath = path.join(outputDir, `${videoId}_audio.m4a`);
 
-  try {
-    console.log(`[Instagram Scraper] Downloading video for ${videoId}...`);
-    const response = await withRetry(() => fetchWithTimeout(media.videoUrl), {
-      maxRetries: 2,
-      baseDelay: 3000,
-    });
+  const renditionUrls = media.videoUrls.length > 0 ? media.videoUrls : [media.videoUrl];
 
-    if (!response.ok) {
-      throw new Error(`Failed to download video: HTTP ${response.status}`);
+  let lastError: Error | null = null;
+  for (const renditionUrl of renditionUrls) {
+    const videoPath = path.join(outputDir, `${videoId}_video.mp4`);
+    try {
+      console.log(`[Instagram Scraper] Downloading video rendition for ${videoId}...`);
+      const response = await withRetry(() => fetchWithTimeout(renditionUrl), {
+        maxRetries: 1,
+        baseDelay: 3000,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to download video: HTTP ${response.status}`);
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      fs.writeFileSync(videoPath, Buffer.from(arrayBuffer));
+
+      console.log(`[Instagram Scraper] Converting video to audio (${videoPath})...`);
+      await convertVideoToM4a(videoPath, audioPath);
+
+      if (fs.existsSync(audioPath)) {
+        const size = fs.statSync(audioPath).size;
+        if (size > 0) {
+          return {
+            audioPath,
+            info: {
+              id: videoId,
+              title: media.title,
+              duration: media.duration,
+              uploader: media.uploader,
+              webpage_url: videoUrl,
+            },
+          };
+        }
+      }
+      throw new Error('Converted audio file is empty');
+    } catch (error: any) {
+      lastError = error;
+      console.log(`[Instagram Scraper] Rendition failed: ${error.message}. Trying next rendition...`);
+    } finally {
+      cleanupFile(videoPath);
     }
-
-    const arrayBuffer = await response.arrayBuffer();
-    fs.writeFileSync(videoPath, Buffer.from(arrayBuffer));
-
-    console.log(`[Instagram Scraper] Converting video to audio (${videoPath})...`);
-    await convertVideoToM4a(videoPath, audioPath);
-
-    if (!fs.existsSync(audioPath)) {
-      throw new Error('Failed to convert video to audio');
-    }
-
-    return {
-      audioPath,
-      info: {
-        id: videoId,
-        title: media.title,
-        duration: media.duration,
-        uploader: media.uploader,
-        webpage_url: videoUrl,
-      },
-    };
-  } catch (error: any) {
-    if (error instanceof InstagramScraperError) {
-      throw error;
-    }
-    throw new Error(`Instagram download failed: ${error.message}`);
-  } finally {
-    cleanupFile(videoPath);
   }
+
+  if (lastError instanceof InstagramScraperError) {
+    throw lastError;
+  }
+  throw new Error(`Instagram download failed: ${lastError?.message || 'All renditions failed'}`);
 }
 
 function convertVideoToM4a(inputPath: string, outputPath: string): Promise<void> {

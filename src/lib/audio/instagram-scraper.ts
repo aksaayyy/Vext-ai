@@ -104,6 +104,7 @@ type Json = Record<string, unknown> | unknown[] | string | number | boolean | nu
 
 export interface InstagramMediaResult {
   videoUrl: string;
+  videoUrls: string[];
   title: string;
   duration: number;
   uploader: string;
@@ -164,6 +165,7 @@ export async function resolveInstagramMedia(inputUrl: string): Promise<Instagram
 
   return {
     videoUrl: videoItem.url,
+    videoUrls: items.filter(item => item.kind === 'video').map(item => item.url),
     title: metadataTitle(media),
     duration: metadataDuration(media),
     uploader: metadataUploader(media),
@@ -489,7 +491,15 @@ function mediaItems(media: Json, code: string): MediaItem[] {
 function instagramItem(media: Record<string, unknown>, index: number | null): MediaItem[] {
   const video = selectVersion(media.video_versions) ?? (typeof media.video_url === 'string' ? media.video_url : null);
   if (video) {
-    return [{ kind: 'video', url: video }];
+    const versions = Array.isArray(media.video_versions) ? (media.video_versions as unknown[]).filter(isObject) : [];
+    const otherUrls = versions
+      .map((v) => (isObject(v) && typeof v.url === 'string' ? v.url : null))
+      .filter((url): url is string => typeof url === 'string' && url !== video);
+    const urls = [video, ...otherUrls];
+    const seen = new Set<string>();
+    return urls
+      .filter((url) => (seen.has(url) ? false : (seen.add(url), true)))
+      .map((url) => ({ kind: 'video' as const, url }));
   }
   const image = selectImage(media);
   return image ? [{ kind: 'image', url: image }] : [];
