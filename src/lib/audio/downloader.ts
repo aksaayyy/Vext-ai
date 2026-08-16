@@ -132,7 +132,9 @@ export async function downloadVideoAudio(
     console.log(`[Downloader] yt-dlp succeeded`);
     return { audioPath, info };
   } catch (error: any) {
-    throw error;
+    const detail = error?.stderr || error?.message || JSON.stringify(error);
+    console.error(`[Downloader] yt-dlp failed: ${detail}`);
+    throw new Error(`yt-dlp failed: ${String(detail).slice(0, 500)}`);
   }
 }
 
