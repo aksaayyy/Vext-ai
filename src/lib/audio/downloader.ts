@@ -98,7 +98,19 @@ export async function downloadVideoAudio(
     { maxRetries: 2, baseDelay: 2000 }
   );
 
-  // Try yt-dlp first with retry and timeout
+  // For Instagram: self-hosted scraper is the primary path (no cookies/login needed)
+  if (isInstagramUrl(videoUrl)) {
+    try {
+      console.log(`[Downloader] Trying Instagram scraper for ${videoUrl}...`);
+      const result = await downloadWithFreeApi(videoUrl, outputDir);
+      console.log(`[Downloader] Instagram scraper succeeded`);
+      return { audioPath: result.audioPath, info: result.info };
+    } catch (scraperError: any) {
+      console.log(`[Downloader] Instagram scraper failed: ${scraperError.message}. Falling back to yt-dlp...`);
+    }
+  }
+
+  // Try yt-dlp with retry and timeout (secondary path)
   try {
     console.log(`[Downloader] Trying yt-dlp for ${videoUrl}...`);
     await withRetry(
@@ -120,25 +132,6 @@ export async function downloadVideoAudio(
     console.log(`[Downloader] yt-dlp succeeded`);
     return { audioPath, info };
   } catch (error: any) {
-    console.log(`[Downloader] yt-dlp failed after retries: ${error.message}`);
-
-    if (isInstagramUrl(videoUrl) && isBlockedError(error)) {
-      console.log(`[Downloader] yt-dlp blocked for Instagram, trying free API...`);
-      try {
-        const result = await downloadWithFreeApi(videoUrl, outputDir);
-        console.log(`[Downloader] Free API succeeded`);
-        return { audioPath: result.audioPath, info: result.info };
-      } catch (apiError: any) {
-        console.log(`[Downloader] Free API also failed: ${apiError.message}`);
-        throw new Error(
-          `Instagram download failed. ` +
-          `yt-dlp: ${error.message}. ` +
-          `Free API: ${apiError.message}. ` +
-          `For private content, provide Instagram cookies via options.instagramCookies.`
-        );
-      }
-    }
-
     throw error;
   }
 }

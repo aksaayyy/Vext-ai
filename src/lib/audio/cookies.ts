@@ -11,9 +11,59 @@ interface ParsedCookie {
   secure: boolean;
 }
 
-function parseCookieString(cookieString: string): ParsedCookie[] {
+// Netscape HTTP Cookie File line: domain\tincludeSubdomains\tpath\tsecure\texpiry\tname\tvalue
+const NETSCAPE_LINE = /^([^\t]+)\t([^\t]+)\t([^\t]+)\t([^\t]+)\t(\d+)\t([^\t]+)\t(.*)$/;
+
+function isNetscapeLine(line: string): boolean {
+  return NETSCAPE_LINE.test(line);
+}
+
+function parseNetscapeCookies(content: string): ParsedCookie[] {
   const cookies: ParsedCookie[] = [];
-  const pairs = cookieString.split(';').map(s => s.trim()).filter(Boolean);
+  const instagramDomains = ['instagram.com', '.instagram.com', 'www.instagram.com'];
+
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+
+    const match = line.match(NETSCAPE_LINE);
+    if (!match) continue;
+
+    const domain = match[1];
+    if (!instagramDomains.includes(domain) && !domain.endsWith('.instagram.com')) continue;
+
+    const path = match[3];
+    const secure = match[4] === 'TRUE';
+    const expires = parseInt(match[5], 10) || 0;
+    const name = match[6];
+    const value = match[7];
+
+    if (!name) continue;
+
+    cookies.push({
+      name,
+      value,
+      domain,
+      path,
+      expires,
+      secure,
+    });
+  }
+
+  return cookies;
+}
+
+function parseCookieString(cookieString: string): ParsedCookie[] {
+  const trimmed = cookieString.trim();
+  if (!trimmed) return [];
+
+  // Detect full Netscape HTTP Cookie File dump (tab-separated lines)
+  if (trimmed.includes('\n') && trimmed.split(/\r?\n/).some(isNetscapeLine)) {
+    return parseNetscapeCookies(trimmed);
+  }
+
+  const cookies: ParsedCookie[] = [];
+  const pairs = trimmed.split(';').map(s => s.trim()).filter(Boolean);
 
   for (const pair of pairs) {
     const eqIndex = pair.indexOf('=');
