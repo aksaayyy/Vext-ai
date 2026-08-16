@@ -190,12 +190,26 @@ export async function resolveInstagramMedia(inputUrl: string): Promise<Instagram
   return {
     videoUrl: videoItem.url,
     videoUrls: allVideoUrls,
-    dashManifest: isObject(primaryMedia) && typeof primaryMedia.video_dash_manifest === 'string' ? primaryMedia.video_dash_manifest : undefined,
+    dashManifest: isObject(primaryMedia) && typeof primaryMedia.video_dash_manifest === 'string'
+      ? decodeDashManifest(primaryMedia.video_dash_manifest)
+      : undefined,
     title: metadataTitle(primaryMedia),
     duration: metadataDuration(primaryMedia),
     uploader: metadataUploader(primaryMedia),
     shortcode: code,
   };
+}
+
+function decodeDashManifest(value: string): string | undefined {
+  try {
+    const decoded = decodeURIComponent(value);
+    if (decoded.includes('<MPD') || decoded.includes('<Period') || decoded.includes('<AdaptationSet')) {
+      return decoded;
+    }
+  } catch {
+    // not URL-encoded, fall through
+  }
+  return value.includes('<MPD') || value.includes('<Period') ? value : undefined;
 }
 
 function extractShortcode(input: string): string | null {
