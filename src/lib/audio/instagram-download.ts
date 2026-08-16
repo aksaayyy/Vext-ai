@@ -170,6 +170,10 @@ function convertManifestToM4a(inputPath: string, outputPath: string): Promise<vo
       .audioCodec('aac')
       .audioBitrate('128k')
       .format('mp4')
+      .withOptions([
+        '-headers',
+        'Referer: https://www.instagram.com/\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36\r\n',
+      ])
       .on('error', (err) => {
         reject(new Error(`FFmpeg manifest conversion error: ${err.message}`));
       })

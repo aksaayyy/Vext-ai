@@ -242,13 +242,33 @@ async function fetchText(url: string, headers: Record<string, string>, timeoutMs
 }
 
 async function pageMedia(code: string): Promise<Json | null> {
-  const response = await fetchText(`https://www.instagram.com/p/${code}/`, navigationHeaders());
-  if (!response.ok) {
-    return null;
+  const attempts = 3;
+  for (let i = 0; i < attempts; i++) {
+    const response = await fetchText(`https://www.instagram.com/p/${code}/`, navigationHeaders());
+    if (!response.ok) {
+      return null;
+    }
+    const html = await response.text();
+    const media = inlineMedia(html, code);
+    if (!media) {
+      continue;
+    }
+    const items = mediaItems(media, code);
+    if (items.length === 0) {
+      continue;
+    }
+    const hasVideo = items.some(item => item.kind === 'video');
+    const hasAudio = isObject(media) && media.has_audio === true;
+    if (hasVideo && hasAudio) {
+      console.log(`[Instagram Scraper] page resolver found audio-bearing media for ${code} (attempt ${i + 1}/${attempts})`);
+      return media;
+    }
+    if (!hasVideo) {
+      return media;
+    }
+    console.log(`[Instagram Scraper] page resolver attempt ${i + 1}/${attempts}: video without audio, retrying with fresh fingerprint`);
   }
-  const html = await response.text();
-  const media = inlineMedia(html, code);
-  return media && mediaItems(media, code).length > 0 ? media : null;
+  return null;
 }
 
 function inlineMedia(html: string, code: string): Json | null {
