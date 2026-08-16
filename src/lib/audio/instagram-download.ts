@@ -63,29 +63,41 @@ export async function downloadInstagramVideo(videoUrl: string, outputDir: string
   const dashManifest = media.dashManifest;
   if (dashManifest && fs.existsSync(audioPath) === false) {
     try {
-      const manifestPath = path.join(outputDir, `${videoId}_manifest.mpd`);
-      fs.writeFileSync(manifestPath, dashManifest);
-      console.log(`[Instagram Scraper] Trying DASH manifest audio extraction for ${videoId}...`);
-      await convertManifestToM4a(manifestPath, audioPath);
-      const size = fs.statSync(audioPath).size;
-      if (size > 0) {
-        console.log(`[Instagram Scraper] DASH manifest audio extraction succeeded (${size} bytes)`);
-        return {
-          audioPath,
-          info: {
-            id: videoId,
-            title: media.title,
-            duration: media.duration,
-            uploader: media.uploader,
-            webpage_url: videoUrl,
-          },
-        };
+      const audioUrl = extractAudioStreamUrl(dashManifest);
+      if (audioUrl) {
+        console.log(`[Instagram Scraper] DASH manifest contains audio stream, downloading directly...`);
+        const response = await withRetry(() => fetchWithTimeout(audioUrl), {
+          maxRetries: 2,
+          baseDelay: 3000,
+        });
+        if (!response.ok) {
+          throw new Error(`Failed to download audio stream: HTTP ${response.status}`);
+        }
+        const arrayBuffer = await response.arrayBuffer();
+        fs.writeFileSync(audioPath, Buffer.from(arrayBuffer));
+        const size = fs.statSync(audioPath).size;
+        if (size > 0) {
+          const probe = await probeStreams(audioPath);
+          if (probe.audioCount > 0) {
+            console.log(`[Instagram Scraper] DASH audio stream downloaded (${size} bytes, ${probe.audioCount} audio stream(s))`);
+            return {
+              audioPath,
+              info: {
+                id: videoId,
+                title: media.title,
+                duration: media.duration,
+                uploader: media.uploader,
+                webpage_url: videoUrl,
+              },
+            };
+          }
+          console.log('[Instagram Scraper] DASH audio download produced non-audio content, discarding');
+        }
+        cleanupFile(audioPath);
+        throw new Error('DASH audio stream download produced empty or invalid output');
       }
-      console.log('[Instagram Scraper] DASH manifest audio extraction produced empty output');
     } catch (error: any) {
-      console.log(`[Instagram Scraper] DASH manifest audio extraction failed: ${error.message}`);
-    } finally {
-      cleanupFile(path.join(outputDir, `${videoId}_manifest.mpd`));
+      console.log(`[Instagram Scraper] DASH audio stream extraction failed: ${error.message}`);
     }
   }
 
@@ -163,23 +175,31 @@ function convertVideoToM4a(inputPath: string, outputPath: string): Promise<void>
   });
 }
 
-function convertManifestToM4a(inputPath: string, outputPath: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    ffmpeg(inputPath)
-      .noVideo()
-      .audioCodec('aac')
-      .audioBitrate('128k')
-      .format('mp4')
-      .withOptions([
-        '-headers',
-        'Referer: https://www.instagram.com/\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36\r\n',
-      ])
-      .on('error', (err) => {
-        reject(new Error(`FFmpeg manifest conversion error: ${err.message}`));
-      })
-      .on('end', () => resolve())
-      .save(outputPath);
-  });
+function extractAudioStreamUrl(manifest: string): string | null {
+  try {
+    const adaptationSets = manifest.split(/<AdaptationSet/g).slice(1);
+    for (const set of adaptationSets) {
+      const isAudio =
+        /contentType=["']audio["']/.test(set) ||
+        (/mimeType=["']audio\/mp4["']/.test(set) && !/codecs=["'][^"']*avc1/.test(set)) ||
+        (/codecs=["']mp4a/.test(set) && !/codecs=["'][^"']*(avc1|hvc1)/.test(set));
+      if (!isAudio) {
+        continue;
+      }
+      const baseUrl = set.match(/<BaseURL>([^<]+)<\/BaseURL>/);
+      if (baseUrl && baseUrl[1]) {
+        return decodeURIComponent(baseUrl[1].trim());
+      }
+      const representation = set.match(/<Representation[^>]*>([\s\S]*?)<\/Representation>/);
+      const repBaseUrl = representation?.[1]?.match(/<BaseURL>([^<]+)<\/BaseURL>/);
+      if (repBaseUrl && repBaseUrl[1]) {
+        return decodeURIComponent(repBaseUrl[1].trim());
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 function cleanupFile(filePath: string): void {
