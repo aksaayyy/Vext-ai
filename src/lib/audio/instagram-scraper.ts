@@ -164,6 +164,13 @@ export async function resolveInstagramMedia(inputUrl: string): Promise<Instagram
       if (isObject(candidate)) {
         const keys = Object.keys(candidate).filter(k => /video|audio|dash|codec/i.test(k));
         console.log(`[Instagram Scraper] Candidate media keys: ${keys.join(', ')}`);
+        if (typeof candidate.video_dash_manifest === 'string') {
+          const raw = candidate.video_dash_manifest;
+          console.log(`[Instagram Scraper] video_dash_manifest length=${raw.length} head=${JSON.stringify(raw.slice(0, 200))}`);
+        }
+        if (typeof candidate.has_audio !== 'undefined') {
+          console.log(`[Instagram Scraper] has_audio=${JSON.stringify(candidate.has_audio)}`);
+        }
       }
     } else {
       console.log(`[Instagram Scraper] ${resolverNames[i]} resolver added ${videos.length} more video rendition(s) for ${code}`);
