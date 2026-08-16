@@ -1,7 +1,7 @@
 import ffmpeg from 'fluent-ffmpeg';
 import fs from 'fs';
 import path from 'path';
-import { downloadWithHeaders, InstagramScraperError, resolveInstagramMedia } from './instagram-scraper';
+import { downloadWithHeaders, InstagramMediaResult, InstagramScraperError, resolveInstagramMedia } from './instagram-scraper';
 import { withRetry } from '../utils/retry';
 
 export interface InstagramDownloadResult {
@@ -45,17 +45,61 @@ async function fetchWithTimeout(url: string, timeoutMs = 120000): Promise<Respon
 }
 
 export async function downloadInstagramVideo(videoUrl: string, outputDir: string): Promise<InstagramDownloadResult> {
-  const media = await withRetry(() => resolveInstagramMedia(videoUrl), {
-    maxRetries: 2,
-    baseDelay: 3000,
-  });
-
-  const videoId = media.shortcode;
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
-  const audioPath = path.join(outputDir, `${videoId}_audio.m4a`);
+  const attempts = 4;
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const media = await withRetry(() => resolveInstagramMedia(videoUrl), {
+      maxRetries: 1,
+      baseDelay: 2000,
+    });
+
+    const videoId = media.shortcode;
+    const audioPath = path.join(outputDir, `${videoId}_audio.m4a`);
+    if (fs.existsSync(audioPath)) {
+      cleanupFile(audioPath);
+    }
+
+    try {
+      const result = await tryDownloadAttempt(videoUrl, media, outputDir, audioPath);
+      return result;
+    } catch (error: any) {
+      lastError = error;
+      const isNoAudio =
+        error.message?.includes('no audio') ||
+        error.message?.includes('empty') ||
+        error.message?.includes('All renditions failed');
+      if (attempt < attempts && isNoAudio) {
+        console.log(`[Instagram Scraper] Attempt ${attempt}/${attempts} failed (${error.message}). Re-resolving with fresh fingerprint...`);
+        await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
+        continue;
+      }
+      if (attempt < attempts && /HTTP 4|timeout|abort|ECONN|ENOTFOUND|Failed to fetch/i.test(error.message || '')) {
+        console.log(`[Instagram Scraper] Attempt ${attempt}/${attempts} failed (${error.message}). Retrying...`);
+        await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
+        continue;
+      }
+      break;
+    }
+  }
+
+  if (lastError instanceof InstagramScraperError) {
+    throw lastError;
+  }
+  throw new Error(`Instagram download failed: ${lastError?.message || 'All attempts failed'}`);
+}
+
+async function tryDownloadAttempt(
+  videoUrl: string,
+  media: InstagramMediaResult,
+  outputDir: string,
+  audioPath: string
+): Promise<InstagramDownloadResult> {
+  const videoId = media.shortcode;
 
   const renditionUrls = media.videoUrls.length > 0 ? media.videoUrls : [media.videoUrl];
   console.log(`[Instagram Scraper] ${renditionUrls.length} rendition(s) to try for ${videoId}`);
@@ -165,7 +209,7 @@ export async function downloadInstagramVideo(videoUrl: string, outputDir: string
   if (lastError instanceof InstagramScraperError) {
     throw lastError;
   }
-  throw new Error(`Instagram download failed: ${lastError?.message || 'All renditions failed'}`);
+  throw new Error(`All renditions failed: ${lastError?.message || 'unknown error'}`);
 }
 
 function convertVideoToM4a(inputPath: string, outputPath: string): Promise<void> {
@@ -186,7 +230,12 @@ function convertVideoToM4a(inputPath: string, outputPath: string): Promise<void>
 function extractAudioStreamUrl(manifest: string): string | null {
   try {
     const adaptationSets = manifest.split(/<AdaptationSet/g).slice(1);
+    console.log(`[Instagram Scraper] DASH manifest has ${adaptationSets.length} adaptation set(s)`);
     for (const set of adaptationSets) {
+      const contentType = set.match(/contentType=["']([^"']+)["']/)?.[1];
+      const mimeType = set.match(/mimeType=["']([^"']+)["']/)?.[1];
+      const codecs = set.match(/codecs=["']([^"']+)["']/)?.[1];
+      console.log(`[Instagram Scraper]   adaptation set: contentType=${contentType} mimeType=${mimeType} codecs=${codecs}`);
       const isAudio =
         /contentType=["']audio["']/.test(set) ||
         (/mimeType=["']audio\/mp4["']/.test(set) && !/codecs=["'][^"']*avc1/.test(set)) ||
@@ -202,6 +251,15 @@ function extractAudioStreamUrl(manifest: string): string | null {
       const repBaseUrl = representation?.[1]?.match(/<BaseURL>([^<]+)<\/BaseURL>/);
       if (repBaseUrl && repBaseUrl[1]) {
         return decodeURIComponent(repBaseUrl[1].trim());
+      }
+      const template = set.match(/media=["']([^"']+)["']/);
+      const initUrl = set.match(/initialization=["']([^"']+)["']/);
+      if (template && template[1]) {
+        const firstSegment = template[1].replace(/\$Number\$/, '1').replace(/\$Number%(\d+)d\$/, '1');
+        return decodeURIComponent(firstSegment);
+      }
+      if (initUrl && initUrl[1]) {
+        return decodeURIComponent(initUrl[1]);
       }
     }
     return null;
