@@ -137,11 +137,13 @@ export async function resolveInstagramMedia(inputUrl: string): Promise<Instagram
   ];
 
   let media: Json | null = null;
-  for (const resolve of resolvers) {
-    const candidate = await resolve();
+  const resolverNames = ['page', 'mobile', 'embed', 'graphql'];
+  for (let i = 0; i < resolvers.length; i++) {
+    const candidate = await resolvers[i]();
     const items = candidate ? mediaItems(candidate, code) : [];
     if (candidate && (!videoRequired || items.some(item => item.kind === 'video'))) {
       media = candidate;
+      console.log(`[Instagram Scraper] Resolved via ${resolverNames[i]} resolver for ${code} (${items.filter(item => item.kind === 'video').length} video rendition(s))`);
       break;
     }
   }

@@ -15,6 +15,25 @@ export interface InstagramDownloadResult {
   };
 }
 
+interface StreamProbe {
+  videoCount: number;
+  audioCount: number;
+}
+
+function probeStreams(filePath: string): Promise<StreamProbe> {
+  return new Promise((resolve) => {
+    ffmpeg.ffprobe(filePath, (err, metadata) => {
+      if (err || !metadata || !metadata.streams) {
+        resolve({ videoCount: 0, audioCount: 0 });
+        return;
+      }
+      const videoCount = metadata.streams.filter((s) => s.codec_type === 'video').length;
+      const audioCount = metadata.streams.filter((s) => s.codec_type === 'audio').length;
+      resolve({ videoCount, audioCount });
+    });
+  });
+}
+
 async function fetchWithTimeout(url: string, timeoutMs = 120000): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -39,12 +58,14 @@ export async function downloadInstagramVideo(videoUrl: string, outputDir: string
   const audioPath = path.join(outputDir, `${videoId}_audio.m4a`);
 
   const renditionUrls = media.videoUrls.length > 0 ? media.videoUrls : [media.videoUrl];
+  console.log(`[Instagram Scraper] ${renditionUrls.length} rendition(s) to try for ${videoId}`);
 
   let lastError: Error | null = null;
-  for (const renditionUrl of renditionUrls) {
+  for (let i = 0; i < renditionUrls.length; i++) {
+    const renditionUrl = renditionUrls[i];
     const videoPath = path.join(outputDir, `${videoId}_video.mp4`);
     try {
-      console.log(`[Instagram Scraper] Downloading video rendition for ${videoId}...`);
+      console.log(`[Instagram Scraper] Downloading video rendition ${i + 1}/${renditionUrls.length} for ${videoId}...`);
       const response = await withRetry(() => fetchWithTimeout(renditionUrl), {
         maxRetries: 1,
         baseDelay: 3000,
@@ -56,6 +77,14 @@ export async function downloadInstagramVideo(videoUrl: string, outputDir: string
 
       const arrayBuffer = await response.arrayBuffer();
       fs.writeFileSync(videoPath, Buffer.from(arrayBuffer));
+      console.log(`[Instagram Scraper] Downloaded ${fs.statSync(videoPath).size} bytes, probing streams...`);
+
+      const probe = await probeStreams(videoPath);
+      const audioCount = probe.audioCount;
+      console.log(`[Instagram Scraper] Video has ${probe.videoCount} video / ${audioCount} audio stream(s)`);
+      if (audioCount === 0) {
+        throw new Error('Video rendition has no audio stream');
+      }
 
       console.log(`[Instagram Scraper] Converting video to audio (${videoPath})...`);
       await convertVideoToM4a(videoPath, audioPath);
