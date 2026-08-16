@@ -146,6 +146,7 @@ export async function resolveInstagramMedia(inputUrl: string): Promise<Instagram
       console.log(`[Instagram Scraper] Resolved via ${resolverNames[i]} resolver for ${code} (${items.filter(item => item.kind === 'video').length} video rendition(s))`);
       break;
     }
+    console.log(`[Instagram Scraper] ${resolverNames[i]} resolver returned ${candidate ? 'media without video' : 'no media'} for ${code}`);
   }
 
   if (!media) {
