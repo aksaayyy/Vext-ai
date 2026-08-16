@@ -123,6 +123,7 @@ class GroqProvider implements Provider {
       const response = await this.client.chat.completions.create({
         messages: [{ role: "user", content: prompt }],
         model: this.model,
+        response_format: { type: "json_object" },
       });
       this.rateLimiter.recordRequest(this.name);
       return response.choices[0]?.message?.content || "";
@@ -192,6 +193,7 @@ class NVIDIAProvider implements Provider {
             temperature: 0.5,
             max_tokens: 1024,
             stream: false,
+            response_format: { type: "json_object" },
           }),
         }
       );
@@ -274,6 +276,7 @@ class OpenRouterProvider implements Provider {
           messages: [{ role: "user", content: prompt }],
           temperature: 0.5,
           max_tokens: 1024,
+          response_format: { type: "json_object" },
         }),
       });
 

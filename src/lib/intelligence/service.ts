@@ -139,7 +139,20 @@ export class IntelligenceService {
     if (cleaned.startsWith('```')) {
       cleaned = cleaned.replace(/^```(json)?\n/, '').replace(/\n```$/, '').trim();
     }
-    
+
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start !== -1 && end > start) {
+      cleaned = cleaned.slice(start, end + 1);
+    }
+
+    try {
+      JSON.parse(cleaned);
+      return cleaned;
+    } catch {
+      // fall through to jsonrepair
+    }
+
     try {
       return jsonrepair(cleaned);
     } catch (e) {
@@ -227,12 +240,34 @@ export class IntelligenceService {
   async generateOutput(transcript: string): Promise<z.infer<typeof SaaSBlueprintSchema>> {
     const prompt = godModePrompt(transcript);
     const result = await this.smartCallWithFailover(prompt);
-    
+
+    const parsed = await this.parseOutputJson(result);
+    return SaaSBlueprintSchema.parse(parsed);
+  }
+
+  private async parseOutputJson(result: string): Promise<unknown> {
     try {
-      const parsed = JSON.parse(this.cleanJson(result));
-      return SaaSBlueprintSchema.parse(parsed);
+      return JSON.parse(this.cleanJson(result));
     } catch (error) {
       console.error('Failed to parse output:', error);
+    }
+
+    const repairPrompt = `
+The following text was supposed to be a single valid JSON object matching the SaaSBlueprint schema, but it contains JSON syntax errors (e.g. unescaped quotes, literal newlines inside strings, trailing commas).
+
+Fix ALL JSON syntax errors and return ONLY the corrected, valid JSON object. Do not add explanations, markdown fences, or extra text.
+
+Malformed JSON:
+"""${result}"""
+`;
+
+    try {
+      const repaired = await this.smartCallWithFailover(repairPrompt);
+      const parsed = JSON.parse(this.cleanJson(repaired));
+      console.log('Output repaired via LLM fallback');
+      return parsed;
+    } catch (error) {
+      console.error('Failed to repair output via LLM:', error);
       throw new Error(`Failed to generate blueprint: ${error}`);
     }
   }
