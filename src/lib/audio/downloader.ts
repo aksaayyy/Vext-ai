@@ -211,12 +211,13 @@ async function downloadAudioFile(videoUrl: string, outputPath: string, options: 
 
   try {
     const ytdlOptions: any = {
-      format: 'bestaudio[ext=m4a]/bestaudio',
+      format: 'bestaudio/best',
       output: outputPath,
       noWarnings: true,
       noCheckCertificates: true,
       noPlaylist: true,
       geoBypass: true,
+      mergeOutputFormat: 'mp4',
       addHeader: isInstagram
         ? ['referer:https://www.instagram.com/', 'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36']
         : ['referer:youtube.com', 'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'],
