@@ -61,9 +61,17 @@ export async function downloadInstagramVideo(videoUrl: string, outputDir: string
   console.log(`[Instagram Scraper] ${renditionUrls.length} rendition(s) to try for ${videoId}`);
 
   const dashManifest = media.dashManifest;
+  if (dashManifest) {
+    console.log(`[Instagram Scraper] DASH manifest present (${dashManifest.length} chars)`);
+  } else {
+    console.log('[Instagram Scraper] No DASH manifest available');
+  }
   if (dashManifest && fs.existsSync(audioPath) === false) {
     try {
       const audioUrl = extractAudioStreamUrl(dashManifest);
+      if (!audioUrl) {
+        console.log('[Instagram Scraper] No audio adaptation set found in DASH manifest');
+      }
       if (audioUrl) {
         console.log(`[Instagram Scraper] DASH manifest contains audio stream, downloading directly...`);
         const response = await withRetry(() => fetchWithTimeout(audioUrl), {
