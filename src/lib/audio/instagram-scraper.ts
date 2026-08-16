@@ -105,6 +105,7 @@ type Json = Record<string, unknown> | unknown[] | string | number | boolean | nu
 export interface InstagramMediaResult {
   videoUrl: string;
   videoUrls: string[];
+  dashManifest?: string;
   title: string;
   duration: number;
   uploader: string;
@@ -189,6 +190,7 @@ export async function resolveInstagramMedia(inputUrl: string): Promise<Instagram
   return {
     videoUrl: videoItem.url,
     videoUrls: allVideoUrls,
+    dashManifest: isObject(primaryMedia) && typeof primaryMedia.video_dash_manifest === 'string' ? primaryMedia.video_dash_manifest : undefined,
     title: metadataTitle(primaryMedia),
     duration: metadataDuration(primaryMedia),
     uploader: metadataUploader(primaryMedia),

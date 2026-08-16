@@ -60,6 +60,35 @@ export async function downloadInstagramVideo(videoUrl: string, outputDir: string
   const renditionUrls = media.videoUrls.length > 0 ? media.videoUrls : [media.videoUrl];
   console.log(`[Instagram Scraper] ${renditionUrls.length} rendition(s) to try for ${videoId}`);
 
+  const dashManifest = media.dashManifest;
+  if (dashManifest && fs.existsSync(audioPath) === false) {
+    try {
+      const manifestPath = path.join(outputDir, `${videoId}_manifest.mpd`);
+      fs.writeFileSync(manifestPath, dashManifest);
+      console.log(`[Instagram Scraper] Trying DASH manifest audio extraction for ${videoId}...`);
+      await convertManifestToM4a(manifestPath, audioPath);
+      const size = fs.statSync(audioPath).size;
+      if (size > 0) {
+        console.log(`[Instagram Scraper] DASH manifest audio extraction succeeded (${size} bytes)`);
+        return {
+          audioPath,
+          info: {
+            id: videoId,
+            title: media.title,
+            duration: media.duration,
+            uploader: media.uploader,
+            webpage_url: videoUrl,
+          },
+        };
+      }
+      console.log('[Instagram Scraper] DASH manifest audio extraction produced empty output');
+    } catch (error: any) {
+      console.log(`[Instagram Scraper] DASH manifest audio extraction failed: ${error.message}`);
+    } finally {
+      cleanupFile(path.join(outputDir, `${videoId}_manifest.mpd`));
+    }
+  }
+
   let lastError: Error | null = null;
   for (let i = 0; i < renditionUrls.length; i++) {
     const renditionUrl = renditionUrls[i];
@@ -128,6 +157,21 @@ function convertVideoToM4a(inputPath: string, outputPath: string): Promise<void>
       .format('mp4')
       .on('error', (err) => {
         reject(new Error(`FFmpeg conversion error: ${err.message}`));
+      })
+      .on('end', () => resolve())
+      .save(outputPath);
+  });
+}
+
+function convertManifestToM4a(inputPath: string, outputPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    ffmpeg(inputPath)
+      .noVideo()
+      .audioCodec('aac')
+      .audioBitrate('128k')
+      .format('mp4')
+      .on('error', (err) => {
+        reject(new Error(`FFmpeg manifest conversion error: ${err.message}`));
       })
       .on('end', () => resolve())
       .save(outputPath);
