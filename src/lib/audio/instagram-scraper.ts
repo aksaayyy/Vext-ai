@@ -165,8 +165,7 @@ export async function resolveInstagramMedia(inputUrl: string): Promise<Instagram
         const keys = Object.keys(candidate).filter(k => /video|audio|dash|codec/i.test(k));
         console.log(`[Instagram Scraper] Candidate media keys: ${keys.join(', ')}`);
         if (typeof candidate.video_dash_manifest === 'string') {
-          const raw = candidate.video_dash_manifest;
-          console.log(`[Instagram Scraper] video_dash_manifest length=${raw.length} head=${JSON.stringify(raw.slice(0, 200))}`);
+          console.log(`[Instagram Scraper] video_dash_manifest length=${candidate.video_dash_manifest.length}`);
         }
         if (typeof candidate.has_audio !== 'undefined') {
           console.log(`[Instagram Scraper] has_audio=${JSON.stringify(candidate.has_audio)}`);
@@ -270,17 +269,15 @@ async function pageMedia(code: string): Promise<Json | null> {
       }
       const hasAudio = isObject(media) && media.has_audio === true;
       if (hasAudio) {
-        console.log(`[Instagram Scraper] page resolver found audio-bearing media for ${code} via ${url} (attempt ${i + 1}/${attempts})`);
+        console.log(`[Instagram Scraper] Resolved via page (audio) for ${code} via ${url}`);
         return media;
       }
       if (!bestVideo) {
         bestVideo = media;
       }
-      console.log(`[Instagram Scraper] page resolver via ${url} (attempt ${i + 1}/${attempts}): video without audio, retrying`);
     }
   }
   if (bestVideo) {
-    console.log(`[Instagram Scraper] page resolver returning best video-only media for ${code}`);
     return bestVideo;
   }
   return null;
