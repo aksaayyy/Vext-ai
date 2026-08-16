@@ -136,24 +136,40 @@ export async function resolveInstagramMedia(inputUrl: string): Promise<Instagram
     () => graphqlMedia(code),
   ];
 
-  let media: Json | null = null;
   const resolverNames = ['mobile', 'page', 'embed', 'graphql'];
+  let primaryMedia: Json | null = null;
+  const allVideoUrls: string[] = [];
+  const seenUrls = new Set<string>();
+  let primaryItems: MediaItem[] = [];
+
   for (let i = 0; i < resolvers.length; i++) {
     const candidate = await resolvers[i]();
     const items = candidate ? mediaItems(candidate, code) : [];
-    if (candidate && (!videoRequired || items.some(item => item.kind === 'video'))) {
-      media = candidate;
-      console.log(`[Instagram Scraper] Resolved via ${resolverNames[i]} resolver for ${code} (${items.filter(item => item.kind === 'video').length} video rendition(s))`);
-      break;
+    if (!candidate || items.length === 0) {
+      console.log(`[Instagram Scraper] ${resolverNames[i]} resolver returned no media for ${code}`);
+      continue;
     }
-    console.log(`[Instagram Scraper] ${resolverNames[i]} resolver returned ${candidate ? 'media without video' : 'no media'} for ${code}`);
+    const videos = items.filter(item => item.kind === 'video');
+    for (const item of videos) {
+      if (!seenUrls.has(item.url)) {
+        seenUrls.add(item.url);
+        allVideoUrls.push(item.url);
+      }
+    }
+    if (allVideoUrls.length > 0 && !primaryMedia) {
+      primaryMedia = candidate;
+      primaryItems = items;
+      console.log(`[Instagram Scraper] Resolved via ${resolverNames[i]} resolver for ${code} (${videos.length} video rendition(s))`);
+    } else {
+      console.log(`[Instagram Scraper] ${resolverNames[i]} resolver added ${videos.length} more video rendition(s) for ${code}`);
+    }
   }
 
-  if (!media) {
+  if (!primaryMedia || allVideoUrls.length === 0) {
     throw await classifyUnavailable(code);
   }
 
-  const items = mediaItems(media, code);
+  const items = primaryItems;
   if (items.length === 0) {
     throw new InstagramScraperError('unavailable', 'Instagram media URL not found');
   }
@@ -168,10 +184,10 @@ export async function resolveInstagramMedia(inputUrl: string): Promise<Instagram
 
   return {
     videoUrl: videoItem.url,
-    videoUrls: items.filter(item => item.kind === 'video').map(item => item.url),
-    title: metadataTitle(media),
-    duration: metadataDuration(media),
-    uploader: metadataUploader(media),
+    videoUrls: allVideoUrls,
+    title: metadataTitle(primaryMedia),
+    duration: metadataDuration(primaryMedia),
+    uploader: metadataUploader(primaryMedia),
     shortcode: code,
   };
 }
