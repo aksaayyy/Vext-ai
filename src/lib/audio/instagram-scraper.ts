@@ -130,14 +130,14 @@ export async function resolveInstagramMedia(inputUrl: string): Promise<Instagram
   const videoRequired = /\/reel\/|\/reels\/|\/tv\//.test(inputUrl);
 
   const resolvers: Array<() => Promise<Json | null>> = [
-    () => pageMedia(code),
     () => mobileMedia(code),
+    () => pageMedia(code),
     () => embedMedia(code),
     () => graphqlMedia(code),
   ];
 
   let media: Json | null = null;
-  const resolverNames = ['page', 'mobile', 'embed', 'graphql'];
+  const resolverNames = ['mobile', 'page', 'embed', 'graphql'];
   for (let i = 0; i < resolvers.length; i++) {
     const candidate = await resolvers[i]();
     const items = candidate ? mediaItems(candidate, code) : [];
