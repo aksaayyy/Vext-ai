@@ -254,7 +254,7 @@ function searchMedia(node: unknown, code: string): Json | null {
 }
 
 async function mobileMedia(code: string): Promise<Json | null> {
-  const id = await mediaId(code);
+  const id = (await mediaId(code)) ?? (await pageMediaId(code));
   if (!id) {
     return null;
   }
@@ -268,26 +268,88 @@ async function mediaId(code: string): Promise<string | null> {
   try {
     const response = await fetchText(url.href, mobileHeaders(), 10000);
     if (!response.ok) {
+      console.log(`[Instagram Scraper] oembed mediaId failed: HTTP ${response.status}`);
       return null;
     }
     const payload = await response.json();
     return isObject(payload) && typeof payload.media_id === 'string' ? payload.media_id : null;
-  } catch {
+  } catch (error) {
+    console.log(`[Instagram Scraper] oembed mediaId error: ${error instanceof Error ? error.message : 'unknown'}`);
     return null;
   }
+}
+
+async function pageMediaId(code: string): Promise<string | null> {
+  try {
+    const response = await fetchText(`https://www.instagram.com/p/${code}/`, navigationHeaders());
+    if (!response.ok) {
+      console.log(`[Instagram Scraper] page mediaId failed: HTTP ${response.status}`);
+      return null;
+    }
+    const html = await response.text();
+    for (const match of html.matchAll(/<script type="application\/json"[^>]*>([\s\S]*?)<\/script>/g)) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(match[1]);
+      } catch {
+        continue;
+      }
+      const id = searchMediaId(parsed, code);
+      if (id) {
+        return id;
+      }
+    }
+    return null;
+  } catch (error) {
+    console.log(`[Instagram Scraper] page mediaId error: ${error instanceof Error ? error.message : 'unknown'}`);
+    return null;
+  }
+}
+
+function searchMediaId(node: unknown, code: string): string | null {
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const id = searchMediaId(child, code);
+      if (id) {
+        return id;
+      }
+    }
+    return null;
+  }
+  if (!isObject(node)) {
+    return null;
+  }
+  if (node.code === code) {
+    if (typeof node.id === 'string' && /^\d+$/.test(node.id)) {
+      return node.id;
+    }
+    if (typeof node.pk === 'string' && /^\d+$/.test(node.pk)) {
+      return node.pk;
+    }
+    return null;
+  }
+  for (const key in node) {
+    const id = searchMediaId(node[key], code);
+    if (id) {
+      return id;
+    }
+  }
+  return null;
 }
 
 async function mobileInfo(mediaIdValue: string): Promise<Json | null> {
   try {
     const response = await fetchText(`https://i.instagram.com/api/v1/media/${mediaIdValue}/info/`, mobileHeaders(), 10000);
     if (!response.ok) {
+      console.log(`[Instagram Scraper] mobile info failed: HTTP ${response.status} for id ${mediaIdValue}`);
       return null;
     }
     const payload = await response.json();
     const items = isObject(payload) && Array.isArray(payload.items) ? payload.items : [];
     const first = items[0];
     return isObject(first) ? first : null;
-  } catch {
+  } catch (error) {
+    console.log(`[Instagram Scraper] mobile info error: ${error instanceof Error ? error.message : 'unknown'}`);
     return null;
   }
 }
